@@ -6,5 +6,6 @@ module.exports = {
     SERVER_URL: "https://ckbot.herokuapp.com",
     SENDGRID_API_KEY: "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",
     EMAIL_FROM: 'aduroux@cashklick.com',
-    EMAIL_TO: 'aduroux@cashklick.com'
+    EMAIL_TO: 'aduroux@cashklick.com',
+    WEATHER_API_KEY: '69c26cc1c96d9c3f2f65dd596160a70a',
 };
