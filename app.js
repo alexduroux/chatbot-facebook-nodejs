@@ -26,7 +26,18 @@ if (!config.FB_APP_SECRET) {
 if (!config.SERVER_URL) { //used for ink to static files
 	throw new Error('missing SERVER_URL');
 }
-
+if (!config.SENGRID_API_KEY) { //sending email
+	throw new Error('missing SENGRID_API_KEY');
+}
+if (!config.EMAIL_FROM) { //sending email
+	throw new Error('missing EMAIL_FROM');
+}
+if (!config.EMAIL_TO) { //sending email
+	throw new Error('missing EMAIL_TO');
+}
+if (!config.WEATHER_API_KEY) { //weather api key
+	throw new Error('missing WEATHER_API_KEY');
+}
 
 
 app.set('port', (process.env.PORT || 5000))
@@ -185,8 +196,111 @@ function handleEcho(messageId, appId, metadata) {
 
 function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 	switch (action) {
+		case "get-current-weather":
+			if (parameters.hasOwnProperty("geo-city") && parameters["geo-city"]!='') {
+
+				var request = require('request');
+
+				request({
+					url: 'http://api.openweathermap.org/data/2.5/weather', //URL to hit
+					qs: {
+						appid: config.WEATHER_API_KEY,
+						q: parameters["geo-city"]
+					}, //Query string data
+				}, function(error, response, body){
+					if(!error && response.statusCode == 200) {
+						let weather = JSON.parse(body);
+						if (weather.hasOwnProperty("weather")) {
+							let reply = `${responseText} ${weather["weather"][0]["description"]}`;
+							sendTextMessage(sender, reply);
+						} else {
+							sendTextMessage(sender,
+							`No weather forecast available for ${parameters["geo-city"]}`);
+						}
+					} else {
+						console.error(response.error);
+					}
+				});
+			} else {
+				sendTextMessage(sender, responseText);
+			}
+			break;
+		case "faq-delivery":
+			sendTextMessage(sender, responseText);
+			sendTypingOn(sender);
+
+			//ask what user wants to do next
+			setTimeout(function() {
+				let buttons = [
+					{
+						type:"web_url",
+						url:"https://www.myapple.com/track_order",
+						title:"Track my order"
+					},
+					{
+						type:"phone_number",
+						title:"Call us",
+						payload:"+16505551234",
+					},
+					{
+						type:"postback",
+						title:"Keep on Chatting",
+						payload:"CHAT"
+					}
+				];
+
+				sendButtonMessage(sender, "What would you like to do next?", buttons);
+			}, 3000)
+
+			break;
+		case "detailed-application":
+			if (isDefined(contexts[0]) && contexts[0].name == 'job_application' && contexts[0].parameters) {
+				let phone_number = (isDefined(contexts[0].parameters['phone-number'])
+				&& contexts[0].parameters['phone-number']!= '') ? contexts[0].parameters['phone-number'] : '';
+				let user_name = (isDefined(contexts[0].parameters['user-name'])
+				&& contexts[0].parameters['user-name']!= '') ? contexts[0].parameters['user-name'] : '';
+				let previous_job = (isDefined(contexts[0].parameters['previous-job'])
+				&& contexts[0].parameters['previous-job']!= '') ? contexts[0].parameters['previous-job'] : '';
+				let years_of_experience = (isDefined(contexts[0].parameters['years-of-experience'])
+				&& contexts[0].parameters['years-of-experience']!= '') ? contexts[0].parameters['years-of-experience'] : '';
+				let job_vacancy = (isDefined(contexts[0].parameters['job-vacancy'])
+				&& contexts[0].parameters['job-vacancy']!= '') ? contexts[0].parameters['job-vacancy'] : '';
+
+				if (phone_number != '' && user_name != '' && previous_job != '' && years_of_experience != ''
+				&& job_vacancy != '') {
+					let emailContent = 'A new job enquiery from ' + user_name + ' for the job: ' + job_vacancy +
+							'.<br> Previous job position: ' + previous_job + '.' +
+							'.<br> Years of experience: ' + years_of_experience + '.' +
+							'.<br> Phone number: ' + phone_number + '.';
+
+					sendEmail('New job application', emailContent);
+				}
+			}
+			sendTextMessage(sender, responseText);
+			break;
+		case "job-enquiry":
+			let replies = [
+				{
+					"content_type":"text",
+					"title":"Accountant",
+					"payload":"Accountant"
+				},
+				{
+					"content_type":"text",
+					"title":"Sales",
+					"payload":"Sales"
+				},
+				{
+					"content_type":"text",
+					"title":"Not interested",
+					"payload":"Not interested"
+				}
+			];
+			sendQuickReply(sender, responseText, replies);
+			break;
 		default:
 			//unhandled action, just send back the text
+			console.log("send responce in handle actiongit: " + responseText);
 			sendTextMessage(sender, responseText);
 	}
 }
@@ -686,7 +800,9 @@ function greetUserText(userId) {
 				console.log("FB user: %s %s, %s",
 					user.first_name, user.last_name, user.gender);
 
-				sendTextMessage(userId, "Welcome " + user.first_name + '!');
+				sendTextMessage(userId, "Welcome " + user.first_name + '! ' +
+				'I can answer frequently asked questions for you ' +
+				'and I perform job interviews. What can I help you with?');
 			} else {
 				console.log("Cannot get data for fb user with id",
 					userId);
@@ -749,6 +865,17 @@ function receivedPostback(event) {
 	var payload = event.postback.payload;
 
 	switch (payload) {
+		case 'GET_STARTED':
+			greetUserText(senderID);
+			break;
+		case 'JOB_APPLY':
+			//get feedback with new jobs
+			sendToApiAi(senderID, "job openings");
+			break;
+		case 'CHAT':
+			//user wants to chat
+			sendTextMessage(senderID, "I love chatting too. Do you have any other questions for me?");
+			break;
 		default:
 			//unindentified payload
 			sendTextMessage(senderID, "I'm not sure what you want. Can you be more specific?");
@@ -880,6 +1007,29 @@ function verifyRequestSignature(req, res, buf) {
 			throw new Error("Couldn't validate the request signature.");
 		}
 	}
+}
+
+function sendEmail(subject, content) {
+	var helper = require('sendgrid').mail;
+
+	var from_email = new helper.Email(config.EMAIL_FROM);
+	var to_email = new helper.Email(config.EMAIL_TO);
+	var subject = subject;
+	var content = new helper.Content("text/html", content);
+	var mail = new helper.Mail(from_email, subject, to_email, content);
+
+	var sg = require('sendgrid')(config.SENGRID_API_KEY);
+	var request = sg.emptyRequest({
+		method: 'POST',
+		path: '/v3/mail/send',
+		body: mail.toJSON()
+	});
+
+	sg.API(request, function(error, response) {
+		console.log(response.statusCode)
+		console.log(response.body)
+		console.log(response.headers)
+	})
 }
 
 function isDefined(obj) {

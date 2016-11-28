@@ -4,4 +4,7 @@ module.exports = {
     API_AI_CLIENT_ACCESS_TOKEN: 'da48003b7a5b4e25913d4a82c60fa7ef',
     FB_APP_SECRET: 'f2d7151e08fc5801aa249b781b00be20',
     SERVER_URL: "https://ckbot.herokuapp.com",
+    SENDGRID_API_KEY: "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",
+    EMAIL_FROM: 'aduroux@cashklick.com',
+    EMAIL_TO: 'aduroux@cashklick.com'
 };
