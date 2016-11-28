@@ -240,7 +240,7 @@ function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 					{
 						type:"phone_number",
 						title:"Call us",
-						payload:"+16505551234",
+						payload:"+14086587100",
 					},
 					{
 						type:"postback",
